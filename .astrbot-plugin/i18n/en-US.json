@@ -1,8 +1,8 @@
 {
   "metadata": {
     "display_name": "Emoji Stealer",
-    "short_desc": "Auto-collect and intelligently send emotes",
-    "desc": "Monitors chat images and uses VLM to auto-classify and store them. Intelligently matches and sends emotes based on conversation mood. Supports LLM proactive emoji search, WebUI management panel, smart emotion matching, and multi-platform compatibility."
+    "short_desc": "Auto-collect and intelligently send stickers",
+    "desc": "Monitors chat images and uses VLM to auto-classify and store them. Intelligently matches and sends stickers based on conversation mood. Supports LLM proactive sticker search, WebUI management panel, smart emotion matching, and multi-platform compatibility."
   },
   "config": {
     "steal_emoji": {
@@ -11,35 +11,35 @@
     },
     "steal_mode": {
       "description": "Steal mode",
-      "hint": "probability=Probability mode: roll chance on each received image\ncooldown=Cooldown mode: enforce minimum interval between steals"
+      "hint": "probability=Probability mode: random chance on each received image\ncooldown=Cooldown mode: enforce a minimum interval between collections"
     },
     "steal_chance": {
       "description": "Steal probability (in probability mode)",
-      "hint": "Probability of stealing on each received image. 0.0=never, 1.0=always. Recommended: 0.2-0.5"
+      "hint": "Probability of attempting to collect each received image. 0.0=never, 1.0=always. Recommended: 0.2–0.5"
     },
     "image_processing_cooldown": {
       "description": "Steal cooldown in seconds (in cooldown mode)",
-      "hint": "Minimum interval between two steals in seconds. 0=no limit."
+      "hint": "Minimum interval between two collections in seconds. 0=no limit."
     },
     "content_filtration": {
-      "description": "Content filtration (block inappropriate images)",
+      "description": "Content filtering (block inappropriate images)",
       "hint": "Uses VLM to review image content. May increase processing time."
     },
     "auto_send": {
-      "description": "Auto-send emotes in chat",
-      "hint": "Bot will automatically send emotes during conversation. Test first."
+      "description": "Auto-send stickers in chat",
+      "hint": "Bot will automatically send stickers during conversation. Test first."
     },
     "emoji_chance": {
       "description": "Emoji send probability",
-      "hint": "Probability of auto-sending an emote. 0.0=never, 1.0=always. Recommended: 0.1-0.3"
+      "hint": "Probability of auto-sending a sticker. 0.0=never, 1.0=always. Recommended: 0.1–0.3"
     },
     "send_emoji_as_gif": {
-      "description": "Send as GIF (emoji-style)",
-      "hint": "On: send as GIF (closer to native emoji style)\nOff: send in original format (png/jpg/gif etc.)\n\nHigh-frequency GIF sending may cause high memory usage."
+      "description": "Send as GIF (native sticker style)",
+      "hint": "On: send as GIF (closer to native sticker style)\nOff: send in original format (png/jpg/gif etc.)\n\nHigh-frequency GIF sending of large images may cause high memory usage."
     },
     "emoji_send_delay": {
       "description": "Emoji send delay in seconds",
-      "hint": "Wait this long before sending emoji to avoid conflicts with message segmentation plugins.\nRecommended: >= 5.0s. Set to 0 to send immediately."
+      "hint": "Delay before sending emoji to avoid conflicts with message-segmentation plugins.\nRecommended: ≥ 5.0 s. Set to 0 to send immediately."
     },
     "emoji_send_delay_random": {
       "description": "Random delay",
@@ -66,11 +66,11 @@
       "hint": "Leave blank to auto-use AstrBot's global default_image_caption_provider_id."
     },
     "send_target_whitelist": {
-      "description": "Send whitelist",
-      "hint": "Format: group:group_id or user:user_id. When non-empty, only whitelisted targets can receive emotes."
+      "description": "Send target whitelist",
+      "hint": "Format: group:group_id or user:user_id. When non-empty, only whitelisted targets can receive stickers."
     },
     "send_target_blacklist": {
-      "description": "Send blacklist",
+      "description": "Send target blacklist",
       "hint": "Format: group:group_id or user:user_id. Can be combined with whitelist; priority controls conflict resolution."
     },
     "send_target_filter_mode": {
@@ -78,11 +78,11 @@
       "hint": "whitelist_first=whitelist takes priority, blacklist_first=blacklist takes priority."
     },
     "steal_target_whitelist": {
-      "description": "Steal whitelist",
-      "hint": "Format: group:group_id or user:user_id. When non-empty, only whitelisted targets allow stealing."
+      "description": "Steal target whitelist",
+      "hint": "Format: group:group_id or user:user_id. When non-empty, only whitelisted targets allow collection."
     },
     "steal_target_blacklist": {
-      "description": "Steal blacklist",
+      "description": "Steal target blacklist",
       "hint": "Format: group:group_id or user:user_id. Can be combined with whitelist; priority controls conflict resolution."
     },
     "steal_target_filter_mode": {
@@ -90,7 +90,7 @@
       "hint": "whitelist_first=whitelist takes priority, blacklist_first=blacklist takes priority."
     },
     "max_reg_num": {
-      "description": "Max emoji count",
+      "description": "Maximum emoji count",
       "hint": "Storage limit. Old images are removed when the limit is exceeded."
     },
     "custom_emoji_classification_prompt": {
@@ -98,8 +98,8 @@
       "hint": "Edit directly. {emotion_list} will be replaced with the category list. Delete all and save, then reload plugin to restore defaults."
     },
     "custom_emoji_classification_with_filter_prompt": {
-      "description": "VLM classification prompt (with filtration)",
-      "hint": "Used when content filtration is enabled. Delete all and save, then reload plugin to restore defaults."
+      "description": "VLM classification prompt (with filtering)",
+      "hint": "Used when content filtering is enabled. Delete all and save, then reload plugin to restore defaults."
     },
     "napcat_token": {
       "description": "NapCat access token",

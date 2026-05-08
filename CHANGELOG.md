@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-05-09
+
+### changed
+- WebUI 迁移至 AstrBot Pages 系统，删除独立 WebServer
+- PluginAPI 重写，handler 直接实现消除委托链
+- `core/` 拆分 6 子目录，按职责分离 15 个子服务
+
+### fix
+- 修复 iframe 沙箱拦截 `confirm`/`alert` 导致操作不可用
+- 补回重构丢失的 `initialize`、hook、辅助方法等
+- 修复 VLM 调用链、子服务委托缺失、导入缺失等重构问题
+
+### removed
+- 删除 `api/` 旧 handler 委托层，逻辑合并到 `plugin_api.py`
+
 ## [2.5.8] - 2026-05-02
 ### improved
 - 哈希查重改用 SQL 直查，不再每次加载全量索引，大幅降低图片处理内存占用

@@ -2549,3 +2549,26 @@ select.codex-input {
 [data-theme="light"] .scene-tag-btn.active {
     color: #6a4c00;
 }
+
+/* ── Toast Notification ─────────────────────────────────── */
+.toast-notification {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    background: var(--bg-panel);
+    border: 1px solid var(--gold-primary);
+    color: var(--text-main);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    animation: toast-in 0.3s ease-out;
+}
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

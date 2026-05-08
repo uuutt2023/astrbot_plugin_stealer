@@ -768,6 +768,25 @@ const TEMPLATE = /* html */ `
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
             </button>
+        </div>
+
+        <div v-if="toastOpen" class="toast-notification" @click="toastOpen = false">
+            {{ toastMessage }}
+        </div>
+
+        <div v-if="confirmOpen" class="modal-overlay" @click.self="onConfirmNo">
+            <div class="modal-panel" style="max-width:400px">
+                <div class="modal-header">
+                    <h2>确认操作</h2>
+                </div>
+                <div style="padding:24px">
+                    <p style="margin:0 0 24px;color:var(--text-main);font-size:1rem">{{ confirmMessage }}</p>
+                    <div style="display:flex;gap:12px">
+                        <button @click="onConfirmNo" class="codex-btn" style="flex:1">取消</button>
+                        <button @click="onConfirmYes" class="codex-btn danger" style="flex:1">确认</button>
+                    </div>
+                </div>
+            </div>
         </div>`;
 
 createApp({
@@ -800,6 +819,29 @@ createApp({
         const uploadFile = ref(null);
         const uploadPreviewUrl = ref(null);
         const uploadError = ref(null);
+
+        // Custom confirm dialog (sandbox blocks native confirm/alert)
+        const confirmOpen = ref(false);
+        const confirmMessage = ref('');
+        let confirmResolve = null;
+        const showConfirm = (msg) => new Promise((resolve) => {
+            confirmMessage.value = msg;
+            confirmOpen.value = true;
+            confirmResolve = resolve;
+        });
+        const onConfirmYes = () => { confirmOpen.value = false; confirmResolve?.(true); };
+        const onConfirmNo = () => { confirmOpen.value = false; confirmResolve?.(false); };
+
+        // Toast notification (sandbox blocks native alert)
+        const toastOpen = ref(false);
+        const toastMessage = ref('');
+        let toastTimer = null;
+        const showAlert = (msg) => {
+            toastMessage.value = msg;
+            toastOpen.value = true;
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { toastOpen.value = false; }, 3000);
+        };
         const uploadForm = reactive({ emotion: '', tags: '', scene: '', desc: '' });
         const availableEmotions = ref([]);
         const analysisScenes = ref([]);
@@ -921,13 +963,22 @@ createApp({
                             data = await bridge.upload(endpoint, file);
                         } else {
                             const json = {};
+                            const fileEntries = [];
                             for (const [k, v] of body.entries()) {
                                 if (v instanceof File) {
-                                    json[k] = await fileToBase64(v);
-                                    json[k + '_name'] = v.name;
+                                    fileEntries.push({ key: k, file: v });
                                 } else {
                                     json[k] = v;
                                 }
+                            }
+                            if (fileEntries.length > 0) {
+                                json._files = await Promise.all(
+                                    fileEntries.map(async (entry) => ({
+                                        key: entry.key,
+                                        name: entry.file.name,
+                                        base64: await fileToBase64(entry.file),
+                                    }))
+                                );
                             }
                             data = await bridge.apiPost(endpoint, json);
                         }
@@ -1081,10 +1132,10 @@ createApp({
         const saveEdit = async () => {
             if (!previewItem.value) return;
             try {
-                const res = await apiFetch('api/images/' + previewItem.value.hash, {
-                    method: 'PUT',
+                const res = await apiFetch('api/images/update', {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(editForm),
+                    body: JSON.stringify({ ...editForm, hash: previewItem.value.hash }),
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1102,10 +1153,10 @@ createApp({
                     }
                     await fetchStats();
                 } else {
-                    alert(data.error || '保存失败');
+                    showAlert(data.error || '保存失败');
                 }
             } catch (e) {
-                alert('保存出错: ' + e.message);
+                showAlert('保存出错: ' + e.message);
             }
         };
 
@@ -1113,10 +1164,13 @@ createApp({
             const msg = blacklist
                 ? '确定要删除并拉黑这张图片吗？\n拉黑后将不再自动收集此图片。'
                 : '确定要删除这张图片吗？此操作无法撤销。';
-            if (!confirm(msg)) return;
+            if (!await showConfirm(msg)) return;
             try {
-                const url = blacklist ? 'api/images/' + img.hash + '?blacklist=true' : 'api/images/' + img.hash;
-                const res = await apiFetch(url, { method: 'DELETE' });
+                const res = await apiFetch('api/images/delete', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hash: img.hash, blacklist }),
+                });
                 if (res.ok) {
                     closePreview();
                     if (images.value.length === 1 && currentPage.value > 1) {
@@ -1125,10 +1179,10 @@ createApp({
                     fetchImages(currentPage.value);
                     fetchStats();
                 } else {
-                    alert('删除失败');
+                    showAlert('删除失败');
                 }
             } catch (e) {
-                alert('操作失败');
+                showAlert('操作失败');
             }
         };
 
@@ -1158,7 +1212,7 @@ createApp({
             if (!confirm('确定要删除选中的 ' + selectedImages.value.size + ' 张图片吗？')) return;
 
             try {
-                const res = await apiFetch('api/images/batch/delete', {
+                const res = await apiFetch('api/images/batch-delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ hashes: Array.from(selectedImages.value) }),
@@ -1172,7 +1226,7 @@ createApp({
                     alert(data.error || '删除失败');
                 }
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                showAlert('操作失败: ' + e.message);
             }
         };
 
@@ -1199,7 +1253,7 @@ createApp({
         const confirmBatchMove = async () => {
             if (!batchTargetCategory.value) return;
             try {
-                const res = await apiFetch('api/images/batch/move', {
+                const res = await apiFetch('api/images/batch-move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1218,14 +1272,14 @@ createApp({
                     alert(data.error || '转移失败');
                 }
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                showAlert('操作失败: ' + e.message);
             }
         };
 
         const confirmBatchScope = async () => {
             if (!batchScopeMode.value) return;
             try {
-                const res = await apiFetch('api/images/batch/scope', {
+                const res = await apiFetch('api/images/batch-scope', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1246,17 +1300,17 @@ createApp({
                     alert(data.error || '作用域设置失败');
                 }
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                showAlert('操作失败: ' + e.message);
             }
         };
 
         const toggleScope = async (img, scopeMode) => {
             if (!img) return;
             try {
-                const res = await apiFetch('api/images/' + img.hash, {
-                    method: 'PUT',
+                const res = await apiFetch('api/images/update', {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scope_mode: scopeMode }),
+                    body: JSON.stringify({ hash: img.hash, scope_mode: scopeMode }),
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1270,7 +1324,7 @@ createApp({
                     alert(data.error || '作用域更新失败');
                 }
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                showAlert('操作失败: ' + e.message);
             }
         };
 
@@ -1353,7 +1407,7 @@ createApp({
                 }
                 formData.append('auto_analyze', String(batchUploadForm.autoAnalyze));
 
-                const res = await apiFetch('api/images/batch/upload', { method: 'POST', body: formData });
+                const res = await apiFetch('api/images/batch-upload', { method: 'POST', body: formData });
                 const data = await res.json();
                 if (data.success) {
                     batchTaskId.value = data.task_id;
@@ -1377,7 +1431,7 @@ createApp({
             batchPollInterval = setInterval(async () => {
                 if (!batchTaskId.value) return;
                 try {
-                    const res = await apiFetch('api/batch/upload/' + batchTaskId.value);
+                    const res = await apiFetch('api/images/batch-upload-status?task_id=' + batchTaskId.value);
                     const data = await res.json();
                     if (data.success) {
                         batchTaskStatus.value = data.status;
@@ -1599,7 +1653,7 @@ createApp({
                     alert(data.error || '添加失败');
                 }
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                showAlert('操作失败: ' + e.message);
             } finally {
                 addingEmotion.value = false;
             }
@@ -1611,8 +1665,10 @@ createApp({
                 return;
             deletingEmotionKey.value = cat.key;
             try {
-                const res = await apiFetch('api/categories/' + encodeURIComponent(cat.key), {
+                const res = await apiFetch('api/categories/delete', {
                     method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: cat.key }),
                 });
                 const data = await res.json().catch(() => ({}));
                 if (res.ok && data.success) {
@@ -1627,7 +1683,7 @@ createApp({
                     alert(data.error || '删除失败');
                 }
             } catch (e) {
-                alert('操作失败: ' + e.message);
+                showAlert('操作失败: ' + e.message);
             } finally {
                 deletingEmotionKey.value = '';
             }
@@ -1776,8 +1832,16 @@ createApp({
             formatDate,
             formatOriginTarget,
             getScopeLabel,
+            PLACEHOLDER,
             imageDataUrls,
             downloadImage,
+
+            confirmOpen,
+            confirmMessage,
+            onConfirmYes,
+            onConfirmNo,
+            toastOpen,
+            toastMessage,
         };
     },
     template: TEMPLATE,

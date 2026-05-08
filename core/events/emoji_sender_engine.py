@@ -1,0 +1,296 @@
+"""表情包发送决策引擎：负责 LLM 响应拦截、自动发送决策和表情包发送。"""
+
+import asyncio
+import random
+import re
+from typing import Any
+
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent
+from astrbot.api.message_components import Plain
+from astrbot.core.agent.message import TextPart
+
+
+class _EmojiTurnState:
+    """封装单次会话中的表情包发送状态。"""
+
+    def __init__(self) -> None:
+        self._active_sent = False
+        self._candidates: list[dict] = []
+        self._auto_decided = False
+        self._auto_allowed = False
+        self._auto_reason = ""
+        self._auto_send_claimed = False
+
+    def mark_active_sent(self) -> None:
+        """标记当前回合已主动发送过表情包。"""
+        self._active_sent = True
+        if hasattr(self, "_event"):
+            self._event.set_extra("stealer_active_sent", True)
+
+    def is_active_sent(self) -> bool:
+        """检查当前回合是否已主动发送过表情包。"""
+        return self._active_sent
+
+    def set_candidates(self, candidates: list[dict]) -> None:
+        """设置候选列表。"""
+        self._candidates = candidates
+
+    def get_candidates(self) -> list[dict]:
+        """获取候选列表。"""
+        return self._candidates
+
+    def is_auto_decided(self) -> bool:
+        """检查是否已做出自动决策。"""
+        return self._auto_decided
+
+    def set_auto_decision(self, allowed: bool, reason: str = "") -> None:
+        """设置自动决策结果。"""
+        self._auto_decided = True
+        self._auto_allowed = allowed
+        self._auto_reason = reason
+
+    def get_auto_allowed(self) -> bool:
+        """获取自动决策是否允许。"""
+        return self._auto_allowed
+
+    def get_auto_reason(self) -> str:
+        """获取自动决策原因。"""
+        return self._auto_reason
+
+    def claim_auto_send(self) -> bool:
+        """尝试占用自动发送权限。"""
+        if self._auto_decided and self._auto_allowed and not self._auto_send_claimed:
+            self._auto_send_claimed = True
+            return True
+        return False
+
+    def is_auto_claimed(self) -> bool:
+        """检查是否已占用自动发送权限。"""
+        return self._auto_send_claimed
+
+
+class EmojiSenderEngine:
+    """负责表情包自动发送决策、情绪注入和响应处理。"""
+
+    AUTO_EMOJI_COOLDOWN_SECONDS = 20  # 同一会话自动发表情的最短间隔
+
+    def __init__(self, plugin_instance: Any) -> None:
+        self.plugin = plugin_instance
+        self._auto_emoji_cooldowns: dict[str, float] = {}
+        self._auto_emoji_cooldowns_max = 1000  # 最大条目数，防止内存泄漏
+        self._auto_emoji_cooldowns_lock = asyncio.Lock()
+
+    # --- 状态管理 ---
+
+    def emoji_turn_state(self, event: AstrMessageEvent) -> _EmojiTurnState:
+        """获取或创建当前会话的 EmojiTurnState。"""
+        key = self.get_auto_emoji_session_key(event)
+        if not hasattr(event, "_emoji_turn_state"):
+            event._emoji_turn_state = {}  # type: ignore[attr-defined]
+        turn_states = event._emoji_turn_state  # type: ignore[attr-defined]
+        if key not in turn_states:
+            turn_states[key] = _EmojiTurnState()
+            turn_states[key]._event = event
+        return turn_states[key]
+
+    def get_auto_emoji_session_key(self, event: AstrMessageEvent) -> str:
+        """获取自动表情会话键。"""
+        session_id = ""
+        if hasattr(event, "get_session_id"):
+            try:
+                session_id = str(event.get_session_id())
+            except Exception:
+                pass
+        if not session_id and hasattr(event, "unified_msg_origin"):
+            try:
+                session_id = str(event.unified_msg_origin)
+            except Exception:
+                pass
+        return session_id or "global"
+
+    # --- 决策检查 ---
+
+    def should_skip_auto_emoji_by_gate(self, text: str) -> bool:
+        """根据文本内容判断是否跳过自动发送。"""
+        if not text:
+            return True
+        # 如果包含明确的指令或标记，跳过自动发送
+        skip_patterns = [
+            r"/meme\s+\w+",
+            r"^\\/",
+        ]
+        for pattern in skip_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return True
+        return False
+
+    async def is_auto_emoji_cooldown_ready(self, event: AstrMessageEvent) -> bool:
+        """检查自动表情冷却是否就绪。"""
+        key = self.get_auto_emoji_session_key(event)
+        now = asyncio.get_event_loop().time()
+        async with self._auto_emoji_cooldowns_lock:
+            last = self._auto_emoji_cooldowns.get(key, 0)
+            if now - last < self.AUTO_EMOJI_COOLDOWN_SECONDS:
+                return False
+            self._auto_emoji_cooldowns[key] = now
+            return True
+
+    def normalize_auto_emoji_chance(self) -> float:
+        """归一化自动表情发送概率。"""
+        try:
+            chance = float(getattr(self.plugin, "emoji_chance", 0.4))
+        except (TypeError, ValueError):
+            chance = 0.4
+        return max(0.0, min(1.0, chance))
+
+    async def resolve_auto_emoji_turn_permission(self, event: AstrMessageEvent) -> bool:
+        """解析自动表情发送权限。"""
+        turn_state = self.emoji_turn_state(event)
+        if not getattr(self.plugin, "auto_send", False):
+            event.set_extra("stealer_auto_emoji_turn_decided", True)
+            event.set_extra("stealer_auto_emoji_turn_reason", "auto_send_disabled")
+            turn_state.set_auto_decision(False, "auto_send_disabled")
+            return False
+        if not self.plugin.is_send_enabled_for_event(event):
+            event.set_extra("stealer_auto_emoji_turn_decided", True)
+            event.set_extra("stealer_auto_emoji_turn_reason", "send_disabled")
+            turn_state.set_auto_decision(False, "send_disabled")
+            return False
+        chance = self.normalize_auto_emoji_chance()
+        if chance <= 0:
+            event.set_extra("stealer_auto_emoji_turn_decided", True)
+            event.set_extra("stealer_auto_emoji_turn_reason", "chance_zero")
+            event.set_extra("stealer_auto_emoji_turn_allowed", False)
+            turn_state.set_auto_decision(False, "chance_zero")
+            return False
+        event.set_extra("stealer_auto_emoji_turn_decided", True)
+        event.set_extra("stealer_auto_emoji_turn_reason", "allowed")
+        turn_state.set_auto_decision(True, "allowed")
+        return True
+
+    def claim_auto_emoji_turn(self, event: AstrMessageEvent) -> bool:
+        """尝试占用当前回合的表情包发送权。"""
+        turn_state = self.emoji_turn_state(event)
+        if event.get_extra("stealer_auto_emoji_turn_claimed"):
+            return True
+        if turn_state.is_active_sent():
+            return False
+        turn_state.mark_active_sent()
+        event.set_extra("stealer_auto_emoji_turn_claimed", True)
+        return True
+
+    def prune_auto_emoji_cooldowns(self, now: float) -> None:
+        """清理过期的自动表情冷却记录。"""
+        cutoff = now - self.AUTO_EMOJI_COOLDOWN_SECONDS * 2
+        expired = [k for k, v in self._auto_emoji_cooldowns.items() if v < cutoff]
+        for k in expired:
+            del self._auto_emoji_cooldowns[k]
+
+    async def mark_auto_emoji_sent(self, event: AstrMessageEvent) -> None:
+        """标记已发送自动表情。"""
+        key = self.get_auto_emoji_session_key(event)
+        now = asyncio.get_event_loop().time()
+        async with self._auto_emoji_cooldowns_lock:
+            self._auto_emoji_cooldowns[key] = now
+
+    # --- 发送 ---
+
+    async def try_send_emoji(
+        self, event: AstrMessageEvent, emotions: list[str], cleaned_text: str
+    ) -> bool:
+        """尝试发送表情包。"""
+        try:
+            selector = getattr(self.plugin, "emoji_selector", None)
+            if selector is None:
+                return False
+            if hasattr(selector, "try_send_emoji"):
+                return await selector.try_send_emoji(event, emotions, cleaned_text)
+
+            from ...core.search.emoji_selector import EmojiSelector
+
+            # 提取情绪
+            emotion = emotions[0] if emotions else "default"
+            emoji_path = await selector.select_emoji(emotion, cleaned_text, event)
+            if not emoji_path:
+                return False
+
+            # 发送
+            await self.send_explicit_emojis(event, [emoji_path], cleaned_text)
+            return True
+        except Exception as e:
+            logger.debug(f"[EmojiSenderEngine] 尝试发送表情包失败: {e}")
+            return False
+
+    async def send_explicit_emojis(
+        self, event: AstrMessageEvent, emoji_paths: list[str], cleaned_text: str
+    ):
+        """发送指定的表情包。"""
+        from astrbot.api.message_components import Image
+
+        if not emoji_paths:
+            return
+
+        for path in emoji_paths:
+            try:
+                await event.send(Image(file=path))
+            except Exception as e:
+                logger.warning(f"[EmojiSenderEngine] 发送表情包失败: {e}")
+
+    def get_emoji_send_delay(self) -> float:
+        """获取表情包发送延迟（秒）。"""
+        delay = getattr(self.plugin, "emoji_send_delay", 0.5)
+        delay_random = getattr(self.plugin, "emoji_send_delay_random", 0.0)
+        try:
+            base = float(delay)
+        except (TypeError, ValueError):
+            base = 0.5
+        try:
+            rand = float(delay_random)
+        except (TypeError, ValueError):
+            rand = 0.0
+        if rand > 0:
+            return base + random.random() * rand
+        return base
+
+    async def async_analyze_and_send_emoji(
+        self,
+        event: AstrMessageEvent,
+        text: str,
+        emotions: list[str],
+        *,
+        user_query: str = "",
+    ):
+        """异步分析并发送表情包。"""
+        try:
+            turn_state = self.emoji_turn_state(event)
+            if turn_state.is_active_sent():
+                logger.debug("[EmojiSenderEngine] 当前回合已发送过表情包，跳过")
+                return
+
+            sent = await self.try_send_emoji(event, emotions, text)
+            if sent:
+                await self.mark_auto_emoji_sent(event)
+                turn_state.mark_active_sent()
+        except Exception as e:
+            logger.debug(f"[EmojiSenderEngine] 异步分析发送表情包失败: {e}")
+
+    # --- 结果处理 ---
+
+    def validate_result(self, result) -> bool:
+        """验证结果是否有效。"""
+        if result is None:
+            return False
+        return True
+
+    def update_result_with_cleaned_text_safe(
+        self, event: AstrMessageEvent, result, cleaned_text: str
+    ):
+        """安全地更新结果中的清理后文本。"""
+        try:
+            if hasattr(result, "cleaned_text"):
+                result.cleaned_text = cleaned_text
+            elif hasattr(result, "result"):
+                result.result = cleaned_text
+        except Exception as e:
+            logger.debug(f"[EmojiSenderEngine] 更新结果文本失败: {e}")
