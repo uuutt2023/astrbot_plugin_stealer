@@ -210,6 +210,23 @@ __marimo__/
 QWEN.md
 AstrBot插件开发深度文档.md
 
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs (generated)
+pages/表情管理/assets/*.js
+pages/表情管理/assets/*.css
+!.gitkeep
+
+# Auto-generated files
+webui/src/auto-imports.d.ts
+webui/src/components.d.ts
+webui/.eslintrc-auto-import.json
+
 # Tests
 tests/
 .vscode/settings.json

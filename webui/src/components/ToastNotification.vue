@@ -1,31 +1,33 @@
 <script setup>
 defineProps({
-    toastOpen: Boolean,
-    toastMessage: String
-})
+  toastOpen: Boolean,
+  toastMessage: String,
+});
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close']);
 </script>
 
 <template>
-    <Transition name="fade">
-        <div v-if="toastOpen" class="toast-notification">
-            {{ toastMessage }}
-        </div>
-    </Transition>
+  <Transition name="fade">
+    <div v-if="toastOpen" class="toast-notification">
+      {{ toastMessage }}
+    </div>
+  </Transition>
 </template>
 
 <script>
 export default {
-    name: 'ToastNotification'
-}
+  name: 'ToastNotification',
+};
 </script>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active {
-    transition: opacity 0.3s;
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
 }
-.fade-enter-from, .fade-leave-to {
-    opacity: 0;
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
