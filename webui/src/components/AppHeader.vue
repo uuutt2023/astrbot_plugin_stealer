@@ -1,12 +1,18 @@
 <script setup>
+import { ref, onMounted } from 'vue'
+
 const isDarkTheme = ref(true)
 
 const initTheme = () => {
-  const saved = localStorage.getItem('theme')
-  if (saved) {
-    isDarkTheme.value = saved === 'dark'
-  } else {
-    isDarkTheme.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+  try {
+    const saved = localStorage.getItem('theme')
+    if (saved) {
+      isDarkTheme.value = saved === 'dark'
+    } else {
+      isDarkTheme.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+    }
+  } catch (e) {
+    // localStorage not available in sandboxed environment
   }
   applyTheme()
 }
@@ -17,7 +23,11 @@ const applyTheme = () => {
 
 const toggleTheme = () => {
   isDarkTheme.value = !isDarkTheme.value
-  localStorage.setItem('theme', isDarkTheme.value ? 'dark' : 'light')
+  try {
+    localStorage.setItem('theme', isDarkTheme.value ? 'dark' : 'light')
+  } catch (e) {
+    // localStorage not available in sandboxed environment
+  }
   applyTheme()
 }
 
