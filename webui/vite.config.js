@@ -35,7 +35,12 @@ export default defineConfig({
     cssCodeSplit: false,
     rollupOptions: {
       output: {
-        manualChunks: undefined
+        // 禁用代码分割，所有 JS 输出到一个文件
+        manualChunks: false,
+        // 使用固定文件名，不带 hash
+        entryFileNames: 'assets/index.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name].[ext]'
       }
     }
   }
