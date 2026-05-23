@@ -33,6 +33,8 @@ export default defineConfig({
     emptyOutDir: true,
     assetsDir: 'assets',
     cssCodeSplit: false,
+    // 小于 4KB 的资源内联为 Base64
+    assetsInlineLimit: 4096,
     rollupOptions: {
       output: {
         // 禁用代码分割，所有 JS 输出到一个文件
