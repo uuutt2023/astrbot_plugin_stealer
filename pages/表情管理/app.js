@@ -380,28 +380,25 @@ const App = {
         // 场景相关
         const selectedScenes = ref(new Set());
 
-        // 登录处理
+        // 登录处理 - 直接使用bridge，无需额外验证
         const handleLoginSubmit = async () => {
             loginState.value = 'loading';
             loginError.value = '';
 
-            try {
-                const sessionToken = await bridge.createSession(apiKey.value);
-                if (sessionToken) {
-                    loginState.value = 'success';
-                    setTimeout(async () => {
-                        loginState.value = 'loggedIn';
-                        initTheme();
-                        loadAll();
-                    }, 800);
-                } else {
-                    loginState.value = 'form';
-                    loginError.value = 'API Key 无效或验证失败';
-                }
-            } catch (e) {
+            // 检查bridge是否存在
+            if (!bridge) {
                 loginState.value = 'form';
-                loginError.value = e.message || '验证失败';
+                loginError.value = '未检测到 AstrBot 桥接环境';
+                return;
             }
+
+            // bridge存在则直接登录成功
+            loginState.value = 'success';
+            setTimeout(async () => {
+                loginState.value = 'loggedIn';
+                initTheme();
+                loadAll();
+            }, 800);
         };
 
         // 分类选择
