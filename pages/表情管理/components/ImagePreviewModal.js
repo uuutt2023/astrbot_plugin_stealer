@@ -8,10 +8,12 @@ export const ImagePreviewModal = {
         availableEmotions: Array,
         imageDataUrls: Object,
         PLACEHOLDER: String,
+        formatOriginTarget: Function,
+        formatDate: Function,
     },
     emits: [
         'close', 'prevImage', 'nextImage', 'startEdit', 'cancelEdit', 'saveEdit',
-        'download', 'delete', 'toggleScope', 'formatOriginTarget', 'formatDate'
+        'download', 'delete', 'toggleScope'
     ],
     computed: {
         currentImageUrl() {
@@ -75,7 +77,7 @@ export const ImagePreviewModal = {
                             </div>
                             <div class="stat-row">
                                 <span class="stat-name">来源</span>
-                                <span class="stat-value">{{ $emit('formatOriginTarget', previewItem?.origin_target) }}</span>
+                                <span class="stat-value">{{ formatOriginTarget(previewItem?.origin_target) }}</span>
                             </div>
                             <div class="stat-row">
                                 <span class="stat-name">描述</span>
@@ -105,7 +107,7 @@ export const ImagePreviewModal = {
                             </div>
                             <div class="stat-row">
                                 <span class="stat-name">添加时间</span>
-                                <span class="stat-value">{{ $emit('formatDate', previewItem?.created_at) }}</span>
+                                <span class="stat-value">{{ formatDate(previewItem?.created_at) }}</span>
                             </div>
                             <div class="stat-row">
                                 <span class="stat-name">ID</span>

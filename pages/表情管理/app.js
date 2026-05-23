@@ -241,22 +241,17 @@ const App = {
     },
 
     setup() {
-        // 检查运行环境
+        // 运行环境检测
         const bridge = window.AstrBotPluginPage;
 
-        // 初始化主题
+        // 主题管理
         const { isDarkTheme, initTheme, toggleTheme } = useTheme();
 
-        // 初始化通知
+        // 通知系统
         const {
-            toastOpen,
-            toastMessage,
-            showAlert,
-            confirmOpen,
-            confirmMessage,
-            showConfirm,
-            onConfirmYes,
-            onConfirmNo,
+            toastOpen, toastMessage, showAlert,
+            confirmOpen, confirmMessage, showConfirm,
+            onConfirmYes, onConfirmNo,
         } = useNotification();
 
         // 登录状态
@@ -264,147 +259,81 @@ const App = {
         const loginError = ref('');
         const apiKey = ref('');
 
-        // 图片数据存储
+        // 图片缓存
         const imageDataUrls = reactive({});
 
-        // 创建 API 封装
+        // API 封装
         const apiFetch = createApiFetch(bridge);
-
-        // 创建图片加载器
         const loadImageData = createImageDataLoader(bridge, imageDataUrls);
 
-        // 初始化图片管理器
+        // 图片管理器
         const {
-            images,
-            categories,
-            stats,
-            loading,
-            searchQuery,
-            selectedCategory,
-            sortBy,
-            currentPage,
-            pageSize,
-            total,
-            fetchImages,
-            fetchStats,
-            fetchEmotions,
-            loadAll,
-            debouncedSearch,
-            prevPage,
-            nextPage,
-            deleteImage,
-            toggleScope,
+            images, categories, stats, loading,
+            searchQuery, selectedCategory, sortBy,
+            currentPage, pageSize, total,
+            fetchImages, fetchStats, fetchEmotions,
+            loadAll, debouncedSearch,
+            prevPage, nextPage, deleteImage, toggleScope,
         } = useImageManager(apiFetch, bridge, imageDataUrls, loadImageData, showAlert, showConfirm);
 
-        // 初始化图片分析器
+        // 图片分析器
         const { isAnalyzing, analyze, applyToForm } = useImageAnalyzer(apiFetch);
 
         // 上传表单
         const uploadForm = reactive({ emotion: '', tags: '', scene: '', desc: '' });
 
-        // 上传相关
+        // 单文件上传
         const {
-            uploadOpen,
-            uploading,
-            uploadFile,
-            uploadPreviewUrl,
-            uploadError,
-            analysisScenes,
-            openUploadModal,
-            closeUploadModal,
-            handleFileSelect,
-            submitUpload: submitUploadFn,
+            uploadOpen, uploading, uploadFile, uploadPreviewUrl, uploadError, analysisScenes,
+            openUploadModal, closeUploadModal, handleFileSelect, submitUpload: submitUploadFn,
         } = useUpload(bridge, apiFetch, ref([]), uploadForm, showAlert);
 
-        // 批量上传相关
+        // 批量上传
         const {
-            batchUploadOpen,
-            batchUploading,
-            batchFiles,
-            batchPreviews,
-            batchUploadError,
-            batchUploadForm,
-            batchTaskId,
-            batchTaskStatus,
-            batchTaskTotal,
-            batchTaskProcessed,
-            batchTaskSuccess,
-            batchTaskFailed,
-            openBatchUploadModal,
-            closeBatchUploadModal,
-            clearBatchFiles,
-            handleBatchFileSelect,
-            submitBatchUpload,
-            resetBatchUpload,
+            batchUploadOpen, batchUploading, batchFiles, batchPreviews, batchUploadError, batchUploadForm,
+            batchTaskId, batchTaskStatus, batchTaskTotal, batchTaskProcessed, batchTaskSuccess, batchTaskFailed,
+            openBatchUploadModal, closeBatchUploadModal, clearBatchFiles, handleBatchFileSelect, submitBatchUpload, resetBatchUpload,
         } = useBatchUpload(apiFetch, ref([]), showAlert, fetchImages, fetchStats);
 
         // 批量操作
         const {
-            isBatchMode,
-            selectedImages,
-            batchMoveOpen,
-            batchTargetCategory,
-            batchScopeOpen,
-            batchScopeMode,
-            toggleBatchMode,
-            toggleSelection,
-            selectAll,
-            handleBatchDelete,
-            openBatchMoveModal,
-            closeBatchMoveModal,
-            confirmBatchMove,
-            openBatchScopeModal,
-            closeBatchScopeModal,
-            confirmBatchScope,
+            isBatchMode, selectedImages, batchMoveOpen, batchTargetCategory, batchScopeOpen, batchScopeMode,
+            toggleBatchMode, toggleSelection, selectAll, handleBatchDelete,
+            openBatchMoveModal, closeBatchMoveModal, confirmBatchMove,
+            openBatchScopeModal, closeBatchScopeModal, confirmBatchScope,
         } = useBatchOperation(apiFetch, showAlert, showConfirm, fetchImages, fetchStats);
 
         // 分类管理
         const {
-            emotionsOpen,
-            availableEmotions,
-            newEmotion,
-            addingEmotion,
-            deletingEmotionKey,
-            openEmotionsModal,
-            closeEmotionsModal,
-            addEmotion,
-            deleteEmotion,
+            emotionsOpen, availableEmotions, newEmotion, addingEmotion, deletingEmotionKey,
+            openEmotionsModal, closeEmotionsModal, addEmotion, deleteEmotion,
         } = useEmotionManager(apiFetch, showAlert, showConfirm);
 
-        // 预览相关
+        // 预览状态
         const previewOpen = ref(false);
         const previewItem = ref(null);
         const isEditing = ref(false);
         const editForm = reactive({ category: '', tags: '', scene: '', desc: '', scope_mode: 'public' });
 
-        // 场景相关
-        const selectedScenes = ref(new Set());
+        // ==================== 事件处理 ====================
 
-        // 登录处理 - 直接使用bridge，无需额外验证
-        const handleLoginSubmit = async () => {
-            loginState.value = 'loading';
-            loginError.value = '';
-
-            // 检查bridge是否存在
-            if (!bridge) {
-                loginState.value = 'form';
-                loginError.value = '未检测到 AstrBot 桥接环境';
-                return;
+        // 登录
+        const handleLoginSubmit = () => {
+            loginState.value = bridge ? 'success' : 'form';
+            loginError.value = bridge ? '' : '未检测到 AstrBot 桥接环境';
+            if (bridge) {
+                setTimeout(() => {
+                    loginState.value = 'loggedIn';
+                    initTheme();
+                    loadAll();
+                }, 800);
             }
-
-            // bridge存在则直接登录成功
-            loginState.value = 'success';
-            setTimeout(async () => {
-                loginState.value = 'loggedIn';
-                initTheme();
-                loadAll();
-            }, 800);
         };
 
         // 分类选择
-        const onCategorySelect = async (cat) => {
+        const onCategorySelect = (cat) => {
             selectedCategory.value = cat;
-            await fetchImages(1);
+            fetchImages(1);
         };
 
         // 预览操作
@@ -445,38 +374,24 @@ const App = {
             isEditing.value = true;
         };
 
-        const cancelEdit = () => {
-            isEditing.value = false;
-        };
+        const cancelEdit = () => { isEditing.value = false; };
 
         const saveEdit = async () => {
             if (!previewItem.value) return;
-            try {
-                const res = await apiFetch('api/images/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...editForm, hash: previewItem.value.hash }),
-                });
-                const data = await res.json();
-                if (data.success) {
-                    isEditing.value = false;
-                    const refreshedImages = await fetchImages(currentPage.value);
-                    const refreshedItem = refreshedImages.find((item) => item.hash === previewItem.value.hash);
-                    if (refreshedItem) {
-                        previewItem.value = refreshedItem;
-                    } else {
-                        previewItem.value.category = editForm.category;
-                        previewItem.value.tags = editForm.tags.split(',').map((t) => t.trim()).filter((t) => t);
-                        previewItem.value.scenes = parseSceneList(editForm.scene);
-                        previewItem.value.desc = editForm.desc;
-                        previewItem.value.scope_mode = editForm.scope_mode || 'public';
-                    }
-                    await fetchStats();
-                } else {
-                    showAlert(data.error || '保存失败');
-                }
-            } catch (e) {
-                showAlert('保存出错: ' + e.message);
+            const body = { ...editForm, hash: previewItem.value.hash };
+            const [res, data] = await apiFetch('api/images/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }).then(r => r.json().then(d => [r, d])).catch(() => [null, null]);
+
+            if (data?.success) {
+                isEditing.value = false;
+                const refreshedImages = await fetchImages(currentPage.value);
+                previewItem.value = refreshedImages.find((i) => i.hash === previewItem.value.hash) || previewItem.value;
+                fetchStats();
+            } else {
+                showAlert(data?.error || '保存失败');
             }
         };
 
@@ -486,33 +401,26 @@ const App = {
         // 删除
         const onDelete = async (item, blacklist = false) => {
             const deleted = await deleteImage(item, blacklist);
-            if (deleted) {
-                closePreview();
-                showAlert(blacklist ? '已删除并拉黑' : '已删除');
-            }
+            if (deleted) closePreview();
         };
 
-        // 切换作用域
+        // 作用域切换
         const onToggleScope = async (item, newMode) => {
             const success = await toggleScope(item, newMode);
             if (success) {
-                if (previewItem.value && previewItem.value.hash === item.hash) {
-                    previewItem.value.scope_mode = newMode;
-                }
+                previewItem.value && (previewItem.value.scope_mode = newMode);
                 showAlert(newMode === 'local' ? '已设为本群限定' : '已设为公共');
             }
         };
 
-        // 分析图片
+        // 图片分析
         const analyzeImage = async () => {
             uploadError.value = null;
             try {
                 const data = await analyze(uploadFile.value);
-                analysisScenes.value = Array.isArray(data.scenes) ? data.scenes : [];
+                analysisScenes.value = data.scenes || [];
                 const result = applyToForm(data, uploadForm, availableEmotions.value);
-                if (!result.filled) {
-                    uploadError.value = '未能识别有效信息';
-                }
+                !result.filled && (uploadError.value = '未能识别有效信息');
             } catch (e) {
                 uploadError.value = e.message || '分析失败';
             }
@@ -520,14 +428,9 @@ const App = {
 
         // 场景切换
         const toggleScene = (scene) => {
-            const sceneList = parseSceneList(uploadForm.scene);
-            if (sceneList.includes(scene)) {
-                uploadForm.scene = sceneList.filter((item) => item !== scene).join('、');
-            } else {
-                uploadForm.scene = [...sceneList, scene].join('、');
-            }
+            const list = parseSceneList(uploadForm.scene);
+            uploadForm.scene = list.includes(scene) ? list.filter((s) => s !== scene).join('、') : [...list, scene].join('、');
         };
-
         const isSceneSelected = (scene) => parseSceneList(uploadForm.scene).includes(scene);
 
         // 提交上传
@@ -535,164 +438,66 @@ const App = {
             const success = await submitUploadFn();
             if (success) {
                 showAlert('上传成功');
-                await fetchImages(1);
-                await fetchStats();
+                fetchImages(1);
+                fetchStats();
             }
         };
 
         // 键盘事件
         const handleKeydown = (e) => {
-            if (!previewOpen.value) return;
-            if (isEditing.value) return;
-            if (e.key === 'ArrowLeft') prevImage();
-            if (e.key === 'ArrowRight') nextImage();
-            if (e.key === 'Escape') closePreview();
+            if (!previewOpen.value || isEditing.value) return;
+            const actions = { ArrowLeft: prevImage, ArrowRight: nextImage, Escape: closePreview };
+            actions[e.key]?.();
         };
 
+        // 生命周期
         onMounted(() => {
-            // 检查登录状态
-            if (bridge) {
-                loginState.value = 'form';
-                window.addEventListener('keydown', handleKeydown);
-            } else {
-                loginState.value = 'error';
-                loginError.value = '未检测到 AstrBot 桥接环境';
-            }
+            loginState.value = bridge ? 'form' : 'error';
+            loginError.value = bridge ? '' : '未检测到 AstrBot 桥接环境';
+            bridge && window.addEventListener('keydown', handleKeydown);
         });
 
-        onUnmounted(() => {
-            window.removeEventListener('keydown', handleKeydown);
-        });
+        onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
+        // 返回
         return {
             // 登录
-            loginState,
-            loginError,
-            apiKey,
-            handleLoginSubmit,
-
+            loginState, loginError, apiKey, handleLoginSubmit,
             // 主题
-            isDarkTheme,
-            toggleTheme,
-
+            isDarkTheme, toggleTheme,
             // 统计
             stats,
-
             // 图片
-            images,
-            imageDataUrls,
-            PLACEHOLDER,
-
+            images, imageDataUrls, PLACEHOLDER,
             // 分类
-            categories,
-            selectedCategory,
-            onCategorySelect,
-
-            // 搜索和排序
-            searchQuery,
-            sortBy,
-            debouncedSearch,
-
+            categories, selectedCategory, onCategorySelect,
+            // 搜索
+            searchQuery, sortBy, debouncedSearch,
             // 加载状态
             loading,
-
             // 分页
-            currentPage,
-            pageSize,
-            total,
-            prevPage,
-            nextPage,
-
+            currentPage, pageSize, total, prevPage, nextPage,
             // 预览
-            previewOpen,
-            previewItem,
-            isEditing,
-            editForm,
-            closePreview,
-            prevImage,
-            nextImage,
-            startEdit,
-            cancelEdit,
-            saveEdit,
-
-            // 下载和删除
-            onDownload,
-            onDelete,
-            onToggleScope,
-
+            previewOpen, previewItem, isEditing, editForm,
+            closePreview, prevImage, nextImage, startEdit, cancelEdit, saveEdit,
+            // 操作
+            onDownload, onDelete, onToggleScope,
             // 通知
-            toastOpen,
-            toastMessage,
-            confirmOpen,
-            confirmMessage,
-            onConfirmYes,
-            onConfirmNo,
-
+            toastOpen, toastMessage, confirmOpen, confirmMessage, onConfirmYes, onConfirmNo,
             // 上传
-            uploadOpen,
-            uploading,
-            uploadFile,
-            uploadPreviewUrl,
-            uploadError,
-            uploadForm,
-            availableEmotions,
-            analysisScenes,
-            isAnalyzing,
-            openUploadModal,
-            closeUploadModal,
-            handleFileSelect,
-            analyzeImage,
-            toggleScene,
-            isSceneSelected,
-            submitUpload,
-
+            uploadOpen, uploading, uploadFile, uploadPreviewUrl, uploadError, uploadForm,
+            availableEmotions, analysisScenes, isAnalyzing,
+            openUploadModal, closeUploadModal, handleFileSelect, analyzeImage, toggleScene, isSceneSelected, submitUpload,
             // 批量上传
-            batchUploadOpen,
-            batchUploading,
-            batchFiles,
-            batchPreviews,
-            batchUploadError,
-            batchUploadForm,
-            batchTaskId,
-            batchTaskStatus,
-            batchTaskTotal,
-            batchTaskProcessed,
-            batchTaskSuccess,
-            batchTaskFailed,
-            openBatchUploadModal,
-            closeBatchUploadModal,
-            clearBatchFiles,
-            handleBatchFileSelect,
-            submitBatchUpload,
-            resetBatchUpload,
-
+            batchUploadOpen, batchUploading, batchFiles, batchPreviews, batchUploadError, batchUploadForm,
+            batchTaskId, batchTaskStatus, batchTaskTotal, batchTaskProcessed, batchTaskSuccess, batchTaskFailed,
+            openBatchUploadModal, closeBatchUploadModal, clearBatchFiles, handleBatchFileSelect, submitBatchUpload, resetBatchUpload,
             // 批量操作
-            isBatchMode,
-            selectedImages,
-            toggleBatchMode,
-            toggleSelection,
-            selectAll,
-            handleBatchDelete,
-            batchMoveOpen,
-            batchTargetCategory,
-            openBatchMoveModal,
-            closeBatchMoveModal,
-            confirmBatchMove,
-            batchScopeOpen,
-            batchScopeMode,
-            openBatchScopeModal,
-            closeBatchScopeModal,
-            confirmBatchScope,
-
+            isBatchMode, selectedImages, toggleBatchMode, toggleSelection, selectAll, handleBatchDelete,
+            batchMoveOpen, batchTargetCategory, openBatchMoveModal, closeBatchMoveModal, confirmBatchMove,
+            batchScopeOpen, batchScopeMode, openBatchScopeModal, closeBatchScopeModal, confirmBatchScope,
             // 分类管理
-            emotionsOpen,
-            newEmotion,
-            addingEmotion,
-            deletingEmotionKey,
-            openEmotionsModal,
-            closeEmotionsModal,
-            addEmotion,
-            deleteEmotion,
+            emotionsOpen, newEmotion, addingEmotion, deletingEmotionKey, openEmotionsModal, closeEmotionsModal, addEmotion, deleteEmotion,
         };
     },
 
