@@ -24,7 +24,8 @@ export const useImageStore = defineStore('image', () => {
   const loadImageData = async (hash, apiFetchFn) => {
     if (!hash || imageDataUrls.value[hash]) return;
     try {
-      const data = await apiFetchFn('image-data', { hash });
+      const response = await apiFetchFn('image-data', { hash });
+      const data = await response.json();
       if (data?.url) {
         imageDataUrls.value[hash] = data.url;
       }

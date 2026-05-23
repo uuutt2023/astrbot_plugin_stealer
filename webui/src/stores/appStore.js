@@ -38,9 +38,13 @@ export const useAppStore = defineStore('app', () => {
 
   // === 主题 ===
   const initTheme = () => {
-    const saved = localStorage.getItem('theme');
-    if (saved !== null) {
-      isDarkTheme.value = saved === 'dark';
+    try {
+      const saved = localStorage.getItem('theme');
+      if (saved !== null) {
+        isDarkTheme.value = saved === 'dark';
+      }
+    } catch (e) {
+      // localStorage not available in sandboxed environment
     }
     applyTheme();
   };
@@ -51,7 +55,11 @@ export const useAppStore = defineStore('app', () => {
 
   const toggleTheme = () => {
     isDarkTheme.value = !isDarkTheme.value;
-    localStorage.setItem('theme', isDarkTheme.value ? 'dark' : 'light');
+    try {
+      localStorage.setItem('theme', isDarkTheme.value ? 'dark' : 'light');
+    } catch (e) {
+      // localStorage not available in sandboxed environment
+    }
     applyTheme();
   };
 
