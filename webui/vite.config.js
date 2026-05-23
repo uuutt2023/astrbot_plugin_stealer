@@ -9,13 +9,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   },
-  server: {
-    port: 5173,
-    host: true
-  },
+  base: './',
   build: {
-    outDir: 'dist',
+    outDir: '../pages/表情管理',
+    emptyOutDir: true,
     assetsDir: 'assets',
-    cssCodeSplit: false
+    cssCodeSplit: false,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
   }
 })
