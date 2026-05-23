@@ -218,7 +218,6 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Build outputs (committed for plugin deployment)
-pages/表情管理/assets/style*.css
 
 # Auto-generated files
 webui/src/auto-imports.d.ts
