@@ -1,14 +1,23 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+/**
+ * @description 主应用组件
+ * @module App.vue
+ */
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+
+// === Composables ===
 import { useTheme } from './composables/useTheme.js'
 import { useNotification } from './composables/useNotification.js'
 import { useImageManager } from './composables/useImageManager.js'
 import { useUpload } from './composables/useUpload.js'
 import { useBatchOperation } from './composables/useBatchOperation.js'
 import { useEmotionManager } from './composables/useEmotionManager.js'
-import { createApiFetch, createImageDataLoader, downloadImage } from './utils/api.js'
-import { parseSceneList, formatOriginTarget, formatDate } from './utils/format.js'
 
+// === Utils ===
+import { createApiFetch, createImageDataLoader, downloadImage } from './utils/api.js'
+import { formatOriginTarget, formatDate } from './utils/format.js'
+
+// === Components ===
 import AppHeader from './components/AppHeader.vue'
 import CategorySidebar from './components/CategorySidebar.vue'
 import InventoryToolbar from './components/InventoryToolbar.vue'
@@ -23,207 +32,330 @@ import LoginPage from './components/LoginPage.vue'
 import ToastNotification from './components/ToastNotification.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 
+// === 常量 ===
 const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
-// Bridge & API
+// === Bridge & API ===
 const bridge = window.AstrBotPluginPage
 const apiFetch = createApiFetch(bridge)
 const imageDataUrls = reactive({})
 const loadImageData = createImageDataLoader(bridge, imageDataUrls)
 
-// Theme
-const { isDarkTheme, initTheme, toggleTheme } = useTheme()
+// === 主题 ===
+const theme = useTheme()
 
-// Notification
-const { toastOpen, toastMessage, showAlert, confirmOpen, confirmMessage, showConfirm, onConfirmYes, onConfirmNo } = useNotification()
+// === 通知 ===
+const notification = useNotification()
 
-// Login
+// === 登录状态 ===
 const loginState = ref('loading')
 const loginError = ref('')
 
-// Image Manager
-const { images, categories, stats, loading, searchQuery, selectedCategory, sortBy, currentPage, pageSize, total,
-        fetchImages, fetchStats, fetchEmotions, loadAll, debouncedSearch, prevPage, nextPage, deleteImage, toggleScope } =
-    useImageManager(apiFetch, bridge, imageDataUrls, loadImageData, showAlert, showConfirm)
+// === 图片管理 ===
+const imageManager = useImageManager(apiFetch, bridge, imageDataUrls, loadImageData, notification.showAlert, notification.showConfirm)
 
-// Upload Form
+// === 上传表单 ===
 const uploadForm = reactive({ emotion: '', tags: '', scene: '', desc: '' })
-const { uploadOpen, uploading, uploadFile, uploadPreviewUrl, uploadError, analysisScenes,
-        openUploadModal, closeUploadModal, handleFileSelect, submitUpload: submitUploadFn } = useUpload(bridge, apiFetch, uploadForm, showAlert)
+const upload = useUpload(bridge, apiFetch, uploadForm, notification.showAlert)
 
-// Batch Operation
-const { isBatchMode, selectedImages, batchMoveOpen, batchTargetCategory, batchScopeOpen, batchScopeMode,
-        toggleBatchMode, toggleSelection, selectAll, handleBatchDelete,
-        openBatchMoveModal, closeBatchMoveModal, confirmBatchMove,
-        openBatchScopeModal, closeBatchScopeModal, confirmBatchScope } = useBatchOperation(apiFetch, showAlert, showConfirm, fetchImages, fetchStats)
+// === 批量操作 ===
+const batch = useBatchOperation(apiFetch, notification.showAlert, notification.showConfirm, imageManager.fetchImages, imageManager.fetchStats)
 
-// Emotion Manager
-const { emotionsOpen, availableEmotions, newEmotion, addingEmotion, deletingEmotionKey,
-        openEmotionsModal, closeEmotionsModal, addEmotion, deleteEmotion } = useEmotionManager(apiFetch, showAlert, showConfirm)
+// === 分类管理 ===
+const emotions = useEmotionManager(apiFetch, notification.showAlert, notification.showConfirm)
 
-// Preview
+// === 预览状态 ===
 const previewOpen = ref(false)
 const previewItem = ref(null)
 const isEditing = ref(false)
-const editForm = reactive({ category: '', tags: '', scene: '', desc: '', scope_mode: 'public' })
+const editForm = reactive({
+  category: '',
+  tags: '',
+  scene: '',
+  desc: '',
+  scope_mode: 'public'
+})
 
-// Login Handler
+// === 登录处理 ===
 const handleLoginSubmit = () => {
-    loginState.value = bridge ? 'success' : 'form'
-    loginError.value = bridge ? '' : '未检测到 AstrBot 桥接环境'
-    if (bridge) {
-        setTimeout(() => {
-            loginState.value = 'loggedIn'
-            initTheme()
-            loadAll()
-        }, 800)
-    }
+  loginState.value = bridge ? 'success' : 'form'
+  loginError.value = bridge ? '' : '未检测到 AstrBot 桥接环境'
+  if (bridge) {
+    setTimeout(() => {
+      loginState.value = 'loggedIn'
+      theme.initTheme()
+      imageManager.loadAll()
+    }, 800)
+  }
 }
 
-// Category Select
+// === 分类选择 ===
 const onCategorySelect = (cat) => {
-    selectedCategory.value = cat
-    fetchImages(1)
+  imageManager.selectedCategory.value = cat
+  imageManager.fetchImages(1)
 }
 
-// Preview Actions
+// === 预览操作 ===
 const onPreviewImage = (img) => {
-    previewItem.value = img
-    previewOpen.value = true
-    isEditing.value = false
+  previewItem.value = img
+  previewOpen.value = true
+  isEditing.value = false
 }
 
 const closePreview = () => {
-    previewOpen.value = false
-    previewItem.value = null
-    isEditing.value = false
+  previewOpen.value = false
+  previewItem.value = null
+  isEditing.value = false
 }
 
 const startEdit = () => {
-    if (!previewItem.value) return
-    Object.assign(editForm, {
-        category: previewItem.value.category,
-        tags: (previewItem.value.tags || []).join(', '),
-        scene: (previewItem.value.scenes || []).join('、'),
-        desc: previewItem.value.desc,
-        scope_mode: previewItem.value.scope_mode || 'public',
-    })
-    isEditing.value = true
+  if (!previewItem.value) return
+  Object.assign(editForm, {
+    category: previewItem.value.category,
+    tags: (previewItem.value.tags || []).join(', '),
+    scene: (previewItem.value.scenes || []).join('、'),
+    desc: previewItem.value.desc,
+    scope_mode: previewItem.value.scope_mode || 'public'
+  })
+  isEditing.value = true
 }
 
 const saveEdit = async () => {
-    if (!previewItem.value) return
-    const body = { ...editForm, hash: previewItem.value.hash }
-    const [res, data] = await apiFetch('api/images/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    }).then(r => r.json().then(d => [r, d])).catch(() => [null, null])
+  if (!previewItem.value) return
+  const body = { ...editForm, hash: previewItem.value.hash }
+  const [res, data] = await apiFetch('api/images/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(r => r.json().then(d => [r, d])).catch(() => [null, null])
 
-    if (data?.success) {
-        isEditing.value = false
-        const refreshedImages = await fetchImages(currentPage.value)
-        previewItem.value = refreshedImages.find((i) => i.hash === previewItem.value.hash) || previewItem.value
-        fetchStats()
-    } else {
-        showAlert(data?.error || '保存失败')
-    }
+  if (data?.success) {
+    isEditing.value = false
+    const refreshedImages = await imageManager.fetchImages(imageManager.currentPage.value)
+    previewItem.value = refreshedImages.find(i => i.hash === previewItem.value.hash) || previewItem.value
+    imageManager.fetchStats()
+  } else {
+    notification.showAlert(data?.error || '保存失败')
+  }
 }
 
 const onDownload = (item) => downloadImage(item, imageDataUrls)
 
 const onDelete = async (item, blacklist = false) => {
-    const deleted = await deleteImage(item, blacklist)
-    if (deleted) closePreview()
+  const deleted = await imageManager.deleteImage(item, blacklist)
+  if (deleted) closePreview()
 }
 
 const onToggleScope = async (item, newMode) => {
-    const success = await toggleScope(item, newMode)
-    if (success) {
-        previewItem.value && (previewItem.value.scope_mode = newMode)
-        showAlert(newMode === 'local' ? '已设为本群限定' : '已设为公共')
-    }
+  const success = await imageManager.toggleScope(item, newMode)
+  if (success) {
+    previewItem.value && (previewItem.value.scope_mode = newMode)
+    notification.showAlert(newMode === 'local' ? '已设为本群限定' : '已设为公共')
+  }
 }
 
-const submitUpload = async () => {
-    const success = await submitUploadFn()
-    if (success) {
-        showAlert('上传成功')
-        fetchImages(1)
-        fetchStats()
-    }
+// === 上传提交 ===
+const submitUploadFromModal = async () => {
+  const success = await upload.submitUpload()
+  if (success) {
+    notification.showAlert('上传成功')
+    imageManager.fetchImages(1)
+    imageManager.fetchStats()
+  }
 }
 
-// Keyboard
+// === 键盘快捷键 ===
 const handleKeydown = (e) => {
-    if (!previewOpen.value || isEditing.value) return
-    const actions = { ArrowLeft: () => {
-        if (!previewItem.value) return
-        const idx = images.value.findIndex((i) => i.hash === previewItem.value.hash)
-        if (idx > 0) previewItem.value = images.value[idx - 1]
-    }, ArrowRight: () => {
-        if (!previewItem.value) return
-        const idx = images.value.findIndex((i) => i.hash === previewItem.value.hash)
-        if (idx < images.value.length - 1) previewItem.value = images.value[idx + 1]
-    }, Escape: closePreview }
-    actions[e.key]?.()
+  if (!previewOpen.value || isEditing.value) return
+  const actions = {
+    ArrowLeft: () => {
+      if (!previewItem.value) return
+      const idx = imageManager.images.value.findIndex(i => i.hash === previewItem.value.hash)
+      if (idx > 0) previewItem.value = imageManager.images.value[idx - 1]
+    },
+    ArrowRight: () => {
+      if (!previewItem.value) return
+      const idx = imageManager.images.value.findIndex(i => i.hash === previewItem.value.hash)
+      if (idx < imageManager.images.value.length - 1) previewItem.value = imageManager.images.value[idx + 1]
+    },
+    Escape: closePreview
+  }
+  actions[e.key]?.()
 }
 
+// === 生命周期 ===
 onMounted(() => {
-    loginState.value = bridge ? 'form' : 'error'
-    loginError.value = bridge ? '' : '未检测到 AstrBot 桥接环境'
-    bridge && window.addEventListener('keydown', handleKeydown)
+  loginState.value = bridge ? 'form' : 'error'
+  loginError.value = bridge ? '' : '未检测到 AstrBot 桥接环境'
+  bridge && window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>
-    <LoginPage v-if="loginState !== 'loggedIn'" :loginState="loginState" :loginError="loginError" @submit="handleLoginSubmit" />
+  <LoginPage
+    v-if="loginState !== 'loggedIn'"
+    :loginState="loginState"
+    :loginError="loginError"
+    @submit="handleLoginSubmit"
+  />
 
-    <div v-else id="app">
-        <AppHeader :stats="stats" :isDarkTheme="isDarkTheme" @toggleTheme="toggleTheme" />
+  <div v-else id="app">
+    <AppHeader
+      :stats="imageManager.stats.value"
+      :isDarkTheme="theme.isDarkTheme.value"
+      @toggleTheme="theme.toggleTheme"
+    />
 
-        <div class="main-container">
-            <CategorySidebar :categories="categories" :selectedCategory="selectedCategory" :stats="stats" @select="onCategorySelect" />
+    <div class="main-container">
+      <CategorySidebar
+        :categories="imageManager.categories.value"
+        :selectedCategory="imageManager.selectedCategory.value"
+        :stats="imageManager.stats.value"
+        @select="onCategorySelect"
+      />
 
-            <div class="inventory-panel">
-                <InventoryToolbar v-model:searchQuery="searchQuery" v-model:sortBy="sortBy" :isBatchMode="isBatchMode" @search="debouncedSearch" @toggleBatch="toggleBatchMode" @openEmotions="openEmotionsModal" @openUpload="openUploadModal" />
+      <div class="inventory-panel">
+        <InventoryToolbar
+          v-model:searchQuery="imageManager.searchQuery.value"
+          v-model:sortBy="imageManager.sortBy.value"
+          :isBatchMode="batch.isBatchMode.value"
+          @search="imageManager.debouncedSearch"
+          @toggleBatch="batch.toggleBatchMode"
+          @openEmotions="emotions.openEmotionsModal"
+          @openUpload="upload.openUploadModal"
+        />
 
-                <div v-if="isBatchMode && selectedImages.size > 0" class="batch-bar">
-                    <span>已选择 {{ selectedImages.size }} 张</span>
-                    <button @click="selectAll(images)" class="codex-btn">全选</button>
-                    <button @click="openBatchMoveModal" class="codex-btn">移动</button>
-                    <button @click="openBatchScopeModal" class="codex-btn">作用域</button>
-                    <button @click="handleBatchDelete" class="codex-btn danger">删除</button>
-                    <button @click="toggleBatchMode" class="codex-btn">取消</button>
-                </div>
-
-                <template v-if="loading">
-                    <div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>
-                </template>
-                <template v-else-if="images.length === 0">
-                    <div class="empty-state"><p>{{ searchQuery ? '未找到匹配的表情包' : '暂无表情包' }}</p></div>
-                </template>
-                <template v-else>
-                    <ImageGrid :images="images" :imageDataUrls="imageDataUrls" :isBatchMode="isBatchMode" :selectedImages="selectedImages" :PLACEHOLDER="PLACEHOLDER" @select="toggleSelection" @preview="onPreviewImage" />
-                    <PaginationBar v-if="total > pageSize" :currentPage="currentPage" :pageSize="pageSize" :total="total" @prev="prevPage" @next="nextPage" />
-                </template>
-            </div>
+        <!-- 批量操作栏 -->
+        <div v-if="batch.isBatchMode.value && batch.selectedImages.value.size > 0" class="batch-bar">
+          <span>已选择 {{ batch.selectedImages.value.size }} 张</span>
+          <button @click="batch.selectAll(imageManager.images.value)" class="codex-btn">全选</button>
+          <button @click="batch.openBatchMoveModal" class="codex-btn">移动</button>
+          <button @click="batch.openBatchScopeModal" class="codex-btn">作用域</button>
+          <button @click="batch.handleBatchDelete" class="codex-btn danger">删除</button>
+          <button @click="batch.toggleBatchMode" class="codex-btn">取消</button>
         </div>
 
-        <ImagePreviewModal :previewOpen="previewOpen" :previewItem="previewItem" :isEditing="isEditing" :editForm="editForm" :availableEmotions="availableEmotions" :imageDataUrls="imageDataUrls" :PLACEHOLDER="PLACEHOLDER" :formatOriginTarget="formatOriginTarget" :formatDate="formatDate" @close="closePreview" @startEdit="startEdit" @cancelEdit="isEditing = false" @saveEdit="saveEdit" @download="onDownload" @delete="onDelete" @toggleScope="onToggleScope" />
+        <!-- 加载状态 -->
+        <template v-if="imageManager.loading.value">
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+          </div>
+        </template>
 
-        <UploadModal :uploadOpen="uploadOpen" :uploading="uploading" :uploadFile="uploadFile" :uploadPreviewUrl="uploadPreviewUrl" :uploadError="uploadError" :uploadForm="uploadForm" :availableEmotions="availableEmotions" :analyzing="false" @close="closeUploadModal" @fileSelect="handleFileSelect" @submitUpload="submitUpload" />
+        <!-- 空状态 -->
+        <template v-else-if="imageManager.images.value.length === 0">
+          <div class="empty-state">
+            <p>{{ imageManager.searchQuery.value ? '未找到匹配的表情包' : '暂无表情包' }}</p>
+          </div>
+        </template>
 
-        <EmotionModal :emotionsOpen="emotionsOpen" :availableEmotions="availableEmotions" :newEmotion="newEmotion" :addingEmotion="addingEmotion" :deletingEmotionKey="deletingEmotionKey" @close="closeEmotionsModal" @addEmotion="addEmotion" @deleteEmotion="deleteEmotion" />
-
-        <BatchMoveModal :batchMoveOpen="batchMoveOpen" :batchTargetCategory="batchTargetCategory" :availableEmotions="availableEmotions" :selectedCount="selectedImages.size" @close="closeBatchMoveModal" @update:batchTargetCategory="val => batchTargetCategory = val" @confirm="confirmBatchMove" />
-
-        <BatchScopeModal :batchScopeOpen="batchScopeOpen" :batchScopeMode="batchScopeMode" :selectedCount="selectedImages.size" @close="closeBatchScopeModal" @update:batchScopeMode="val => batchScopeMode = val" @confirm="confirmBatchScope" />
-
-        <ToastNotification :toastOpen="toastOpen" :toastMessage="toastMessage" @close="toastOpen = false" />
-
-        <ConfirmDialog :confirmOpen="confirmOpen" :confirmMessage="confirmMessage" @yes="onConfirmYes" @no="onConfirmNo" />
+        <!-- 图片列表 -->
+        <template v-else>
+          <ImageGrid
+            :images="imageManager.images.value"
+            :imageDataUrls="imageDataUrls"
+            :isBatchMode="batch.isBatchMode.value"
+            :selectedImages="batch.selectedImages.value"
+            :PLACEHOLDER="PLACEHOLDER"
+            @select="batch.toggleSelection"
+            @preview="onPreviewImage"
+          />
+          <PaginationBar
+            v-if="imageManager.total.value > imageManager.pageSize.value"
+            :currentPage="imageManager.currentPage.value"
+            :pageSize="imageManager.pageSize.value"
+            :total="imageManager.total.value"
+            @prev="imageManager.prevPage"
+            @next="imageManager.nextPage"
+          />
+        </template>
+      </div>
     </div>
+
+    <!-- 图片预览弹窗 -->
+    <ImagePreviewModal
+      :previewOpen="previewOpen"
+      :previewItem="previewItem"
+      :isEditing="isEditing"
+      :editForm="editForm"
+      :availableEmotions="emotions.availableEmotions.value"
+      :imageDataUrls="imageDataUrls"
+      :PLACEHOLDER="PLACEHOLDER"
+      :formatOriginTarget="formatOriginTarget"
+      :formatDate="formatDate"
+      @close="closePreview"
+      @startEdit="startEdit"
+      @cancelEdit="isEditing = false"
+      @saveEdit="saveEdit"
+      @download="onDownload"
+      @delete="onDelete"
+      @toggleScope="onToggleScope"
+    />
+
+    <!-- 上传弹窗 -->
+    <UploadModal
+      :uploadOpen="upload.uploadOpen.value"
+      :uploading="upload.uploading.value"
+      :uploadFile="upload.uploadFile.value"
+      :uploadPreviewUrl="upload.uploadPreviewUrl.value"
+      :uploadError="upload.uploadError.value"
+      :uploadForm="uploadForm"
+      :availableEmotions="emotions.availableEmotions.value"
+      :analyzing="false"
+      @close="upload.closeUploadModal"
+      @fileSelect="upload.handleFileSelect"
+      @submitUpload="submitUploadFromModal"
+    />
+
+    <!-- 分类管理弹窗 -->
+    <EmotionModal
+      :emotionsOpen="emotions.emotionsOpen.value"
+      :availableEmotions="emotions.availableEmotions.value"
+      :newEmotion="emotions.newEmotion"
+      :addingEmotion="emotions.addingEmotion.value"
+      :deletingEmotionKey="emotions.deletingEmotionKey.value"
+      @close="emotions.closeEmotionsModal"
+      @addEmotion="emotions.addEmotion"
+      @deleteEmotion="emotions.deleteEmotion"
+    />
+
+    <!-- 批量移动弹窗 -->
+    <BatchMoveModal
+      :batchMoveOpen="batch.batchMoveOpen.value"
+      :batchTargetCategory="batch.batchTargetCategory.value"
+      :availableEmotions="emotions.availableEmotions.value"
+      :selectedCount="batch.selectedImages.value.size"
+      @close="batch.closeBatchMoveModal"
+      @update:batchTargetCategory="val => batch.batchTargetCategory.value = val"
+      @confirm="batch.confirmBatchMove"
+    />
+
+    <!-- 批量作用域弹窗 -->
+    <BatchScopeModal
+      :batchScopeOpen="batch.batchScopeOpen.value"
+      :batchScopeMode="batch.batchScopeMode.value"
+      :selectedCount="batch.selectedImages.value.size"
+      @close="batch.closeBatchScopeModal"
+      @update:batchScopeMode="val => batch.batchScopeMode.value = val"
+      @confirm="batch.confirmBatchScope"
+    />
+
+    <!-- Toast通知 -->
+    <ToastNotification
+      :toastOpen="notification.toastOpen.value"
+      :toastMessage="notification.toastMessage.value"
+      @close="notification.toastOpen.value = false"
+    />
+
+    <!-- 确认对话框 -->
+    <ConfirmDialog
+      :confirmOpen="notification.confirmOpen.value"
+      :confirmMessage="notification.confirmMessage.value"
+      @yes="notification.onConfirmYes"
+      @no="notification.onConfirmNo"
+    />
+  </div>
 </template>
