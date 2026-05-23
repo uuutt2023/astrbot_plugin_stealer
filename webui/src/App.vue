@@ -2,7 +2,7 @@
 /**
  * @description 根组件 - 路由入口和登录状态控制
  */
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useCookie } from 'vue-cookie-next';
 
 import { useAppStore } from '@/stores/appStore.js';
@@ -10,8 +10,18 @@ import { useAppStore } from '@/stores/appStore.js';
 const appStore = useAppStore();
 const $cookie = useCookie();
 
+// 初始化桥接（在根组件挂载时执行）
+onMounted(() => {
+  const bridge = window.AstrBotPluginPage;
+  appStore.initBridge(bridge);
+  if (bridge) {
+    appStore.setLoginState('form', '');
+  } else {
+    appStore.setLoginState('error', '未检测到 AstrBot 桥接环境');
+  }
+});
+
 // 检查登录状态
-const isLoggedIn = computed(() => appStore.loginState === 'loggedIn');
 const showLogin = computed(() => appStore.loginState !== 'loggedIn');
 
 // 处理登录提交

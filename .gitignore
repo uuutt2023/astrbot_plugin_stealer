@@ -217,10 +217,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build outputs (generated)
+# Build outputs (committed for plugin deployment)
 pages/表情管理/assets/*.js
 pages/表情管理/assets/*.css
-!.gitkeep
 
 # Auto-generated files
 webui/src/auto-imports.d.ts

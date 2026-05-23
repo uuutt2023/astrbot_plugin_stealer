@@ -35,15 +35,11 @@ const editForm = reactive({
 
 // === 初始化 ===
 onMounted(() => {
-  const bridge = window.AstrBotPluginPage;
-  appStore.initBridge(bridge);
-
+  const bridge = appStore.bridge;
   if (bridge) {
     appStore.apiFetch = createApiFetch(bridge);
-    appStore.setLoginState('form', '');
     window.addEventListener('keydown', handleKeydown);
-  } else {
-    appStore.setLoginState('error', '未检测到 AstrBot 桥接环境');
+    loadInitialData();
   }
 });
 
@@ -57,7 +53,6 @@ const handleLoginSubmit = () => {
   if (appStore.bridge) {
     setTimeout(() => {
       appStore.initTheme();
-      loadInitialData();
     }, 800);
   }
 };
